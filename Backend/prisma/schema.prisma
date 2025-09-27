@@ -1,0 +1,128 @@
+// prisma/schema.prisma
+
+// ========== DATASOURCE & GENERATOR ==========
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // Debe existir en .env
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ========== ENUMS ==========
+enum PaymentType {
+  CASH
+  CARD
+  NEQUI
+  DAVIPLATA
+  BANCOLOMBIA
+  MERCADOPAGO
+  STRIPE
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum SenderType {
+  USER
+  STORE
+  ADMIN
+}
+
+// ========== MODELS ==========
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  stores        Store[]        @relation("UserStores")
+  ratings       StoreRating[]
+  messages      Message[]      @relation("UserMessages")
+  conversations Conversation[] @relation("UserConversations")
+}
+
+model Store {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerUserId String   @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  photoUrl    String?
+  coverUrl    String?
+  phone       String?
+  addressLine String?
+  lat         Decimal? @db.Decimal(10, 7)
+  lng         Decimal? @db.Decimal(10, 7)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner          User                 @relation("UserStores", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  paymentMethods StorePaymentMethod[]
+  ratings        StoreRating[]
+  conversations  Conversation[]
+}
+
+model StorePaymentMethod {
+  id        String      @id @default(uuid()) @db.Uuid
+  storeId   String      @db.Uuid
+  type      PaymentType
+  isEnabled Boolean     @default(true)
+  details   Json?       @db.JsonB
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model StoreRating {
+  id        String   @id @default(uuid()) @db.Uuid
+  storeId   String   @db.Uuid
+  userId    String   @db.Uuid
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // No usamos @@check para evitar preview features; validamos 1..5 en código
+
+  @@unique([storeId, userId]) // una reseña por usuario por tienda
+}
+
+model Conversation {
+  id             String             @id @default(uuid()) @db.Uuid
+  storeId        String             @db.Uuid
+  customerUserId String             @db.Uuid
+  status         ConversationStatus @default(OPEN)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer User      @relation("UserConversations", fields: [customerUserId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([storeId, customerUserId, status]) // una conversación OPEN por par tienda-usuario
+}
+
+model Message {
+  id             String     @id @default(uuid()) @db.Uuid
+  conversationId String     @db.Uuid
+  senderType     SenderType
+  senderUserId   String?    @db.Uuid
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUser   User?        @relation("UserMessages", fields: [senderUserId], references: [id], onDelete: SetNull)
+}
