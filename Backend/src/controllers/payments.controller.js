@@ -1,20 +1,22 @@
 // backend/src/controllers/payments.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { StorePaymentMethod, Store } = require('../models');
 
 exports.listByStore = async (req, res) => {
-  const data = await prisma.storePaymentMethod.findMany({ where: { storeId: req.params.storeId } });
+  const data = await StorePaymentMethod.findAll({ where: { storeId: req.params.storeId } });
   res.json({ ok: true, data });
 };
 
 exports.addForStore = async (req, res) => {
   try {
-    const store = await prisma.store.findUnique({ where: { id: req.params.storeId } });
+    const store = await Store.findByPk(req.params.storeId);
     if (!store) return res.status(404).json({ ok: false, message: 'Store not found' });
     if (store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
 
-    const created = await prisma.storePaymentMethod.create({
-      data: { storeId: store.id, type: req.body.type, isEnabled: !!req.body.isEnabled, details: req.body.details || {} }
+    const created = await StorePaymentMethod.create({
+      storeId: store.id,
+      type: req.body.type,
+      isEnabled: !!req.body.isEnabled,
+      details: req.body.details || {}
     });
     res.status(201).json({ ok: true, data: created });
   } catch (e) {
@@ -24,19 +26,23 @@ exports.addForStore = async (req, res) => {
 };
 
 exports.update = async (req, res) => {
-  const pm = await prisma.storePaymentMethod.findUnique({ where: { id: req.params.id }, include: { store: true } });
+  const pm = await StorePaymentMethod.findByPk(req.params.id, { 
+    include: { model: Store, as: 'store' } 
+  });
   if (!pm) return res.status(404).json({ ok: false, message: 'Payment not found' });
   if (pm.store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
 
-  const upd = await prisma.storePaymentMethod.update({ where: { id: pm.id }, data: req.body });
-  res.json({ ok: true, data: upd });
+  await pm.update(req.body);
+  res.json({ ok: true, data: pm });
 };
 
 exports.remove = async (req, res) => {
-  const pm = await prisma.storePaymentMethod.findUnique({ where: { id: req.params.id }, include: { store: true } });
+  const pm = await StorePaymentMethod.findByPk(req.params.id, { 
+    include: { model: Store, as: 'store' } 
+  });
   if (!pm) return res.status(404).json({ ok: false, message: 'Payment not found' });
   if (pm.store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
 
-  await prisma.storePaymentMethod.delete({ where: { id: pm.id } });
+  await pm.destroy();
   res.status(204).send();
 };

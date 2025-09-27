@@ -17,5 +17,7 @@ function auth(req, res, next) {
   }
 }
 
-module.exports = auth;            // 👈 exporta la FUNCIÓN
-// NO uses module.exports = { auth } aquí
+module.exports = auth;
+module.exports.isAuthenticated = auth;
+module.exports.authRequired = auth;
+module.exports.authGuard = auth;

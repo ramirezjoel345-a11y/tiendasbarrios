@@ -3,16 +3,15 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
-const env = require('./config/env');
-const { sequelize } = require('./models'); // usa models/index.js
-
+const env = require('./src/config/env');
+const { sequelize } = require('./src/models');
 const app = express();
 
 // Middlewares de seguridad y parsing
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // ← AGREGADO
+app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // Healthchecks
@@ -27,10 +26,9 @@ app.get('/health/db', async (_req, res) => {
 });
 
 // 👇 AGREGAR RUTAS PRINCIPALES - IMPORTANTE
-const routes = require('./routes');
-app.use('/api/v1', routes); // ← Prefijo versionado recomendado
-// o si prefieres sin prefijo: app.use('/', routes);
 
+const routes = require('./src/routes');
+app.use('/api/v1', routes);
 // IMPORTANTE: en producción NO uses alter/sync. Usa migraciones.
 // Aquí solo autenticamos conexión.
 (async () => {
@@ -46,4 +44,4 @@ app.use('/api/v1', routes); // ← Prefijo versionado recomendado
   }
 })();
 
-module.exports = app; // ← AGREGADO para testing o otros usos
+module.exports = app;

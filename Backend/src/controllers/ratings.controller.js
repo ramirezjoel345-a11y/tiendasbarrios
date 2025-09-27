@@ -1,31 +1,33 @@
 // backend/src/controllers/ratings.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { fn, col } = require('sequelize');
+const { StoreRating } = require('../models');
 
 exports.listByStore = async (req, res) => {
-  const data = await prisma.storeRating.findMany({
+  const data = await StoreRating.findAll({
     where: { storeId: req.params.storeId },
-    orderBy: { createdAt: 'desc' }
+    order: [['createdAt', 'DESC']],
   });
   res.json({ ok: true, data });
 };
 
 exports.avgForStore = async (req, res) => {
-  const agg = await prisma.storeRating.aggregate({
+  const result = await StoreRating.findOne({
+    attributes: [[fn('AVG', col('rating')), 'avg']],
     where: { storeId: req.params.storeId },
-    _avg: { rating: true }
+    raw: true,
   });
-  res.json({ ok: true, data: { avg: agg._avg.rating || null } });
+
+  const avg = result?.avg ? Number(result.avg) : null;
+  res.json({ ok: true, data: { avg } });
 };
 
 exports.upsertForUser = async (req, res) => {
   const { rating, comment } = req.body || {};
   if (!rating || rating < 1 || rating > 5) return res.status(400).json({ ok: false, message: 'rating 1-5 requerido' });
 
-  const row = await prisma.storeRating.upsert({
-    where: { storeId_userId: { storeId: req.params.storeId, userId: req.user.id } },
-    update: { rating, comment },
-    create: { storeId: req.params.storeId, userId: req.user.id, rating, comment }
-  });
+  const [row] = await StoreRating.upsert(
+    { storeId: req.params.storeId, userId: req.user.id, rating, comment },
+    { returning: true, conflictFields: ['storeId', 'userId'] }
+  );
   res.status(201).json({ ok: true, data: row });
 };

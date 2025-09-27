@@ -1,4 +1,4 @@
-const prisma = require('../config/prisma');
+const { Store } = require('../models');
 
 /** Requiere que el usuario tenga uno de los roles dados */
 function requireRole(...roles) {
@@ -15,9 +15,9 @@ function requireRole(...roles) {
 async function requireShopOwner(req, res, next) {
   try {
     const { id } = req.params;
-    const shop = await prisma.shop.findUnique({ where: { id } });
+    const shop = await Store.findByPk(id);
     if (!shop) return res.status(404).json({ ok: false, message: 'Tienda no encontrada' });
-    if (shop.ownerId !== req.user.id) {
+    if (shop.ownerUserId !== req.user.id) {
       return res.status(403).json({ ok: false, message: 'No eres dueño de esta tienda' });
     }
     req.shop = shop;

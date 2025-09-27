@@ -1,14 +1,23 @@
 // backend/src/controllers/stores.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { Op } = require('sequelize');
+const { Store } = require('../models');
 
 exports.create = async (req, res) => {
   try {
     const ownerUserId = req.user.id;
     const { name, slug, description, photoUrl, coverUrl, phone, addressLine, lat, lng } = req.body;
 
-    const store = await prisma.store.create({
-      data: { name, slug, description, photoUrl, coverUrl, phone, addressLine, lat, lng, ownerUserId }
+    const store = await Store.create({
+      name,
+      slug,
+      description,
+      photoUrl,
+      coverUrl,
+      phone,
+      addressLine,
+      lat,
+      lng,
+      ownerUserId
     });
 
     res.status(201).json({ ok: true, data: store });
@@ -21,9 +30,13 @@ exports.create = async (req, res) => {
 exports.list = async (req, res) => {
   try {
     const { q } = req.query;
-    const data = await prisma.store.findMany({
-      where: q ? { name: { contains: q, mode: 'insensitive' } } : {},
-      orderBy: { createdAt: 'desc' }
+    const where = q
+      ? { name: { [Op.iLike]: `%${q}%` } }
+      : {};
+    
+    const data = await Store.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
     });
     res.json({ ok: true, data });
   } catch (e) {
@@ -34,7 +47,7 @@ exports.list = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const data = await prisma.store.findUnique({ where: { id: req.params.id } });
+    const data = await Store.findByPk(req.params.id);
     if (!data) return res.status(404).json({ ok: false, message: 'Tienda no encontrada' });
     res.json({ ok: true, data });
   } catch (e) {

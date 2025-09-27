@@ -2,7 +2,7 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const prisma = require('../utils/prisma');
+const { User } = require('../models');
 
 const router = Router();
 
@@ -43,13 +43,11 @@ router.post('/register', async (req, res, next) => {
     const allowedRoles = ['VECINO', 'TENDERO'];
     const roleValue = allowedRoles.includes(role) ? role : 'VECINO';
 
-    const exists = await prisma.user.findUnique({ where: { email } });
+    const exists = await User.findOne({ where: { email } });
     if (exists) return res.status(409).json({ ok: false, message: 'Email ya registrado' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { name, email, passwordHash, role: roleValue },
-    });
+    const user = await User.create({ name, email, passwordHash, role: roleValue });
 
     const token = signAccess(user);
     const refreshToken = signRefresh(user);
@@ -65,7 +63,7 @@ router.post('/login', async (req, res, next) => {
     if (!email || !password)
       return res.status(400).json({ ok: false, message: 'Email y password son requeridos' });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await User.findOne({ where: { email } });
     if (!user) return res.status(401).json({ ok: false, message: 'Credenciales inválidas' });
 
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -92,7 +90,7 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ ok: false, message: 'refreshToken inválido' });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await User.findByPk(payload.sub);
     if (!user) return res.status(404).json({ ok: false, message: 'Usuario no encontrado' });
 
     const token = signAccess(user);
@@ -115,7 +113,7 @@ router.get('/me', async (req, res, next) => {
       return res.status(401).json({ ok: false, message: 'Token inválido o expirado' });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await User.findByPk(payload.sub);
     if (!user) return res.status(404).json({ ok: false, message: 'Usuario no encontrado' });
 
     res.json({ ok: true, user: toPublicUser(user) });

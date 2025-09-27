@@ -1,81 +1,84 @@
 // backend/src/controllers/chats.controller.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { Conversation, Store, Message } = require('../models');
+
+async function ensureAccess(conversationId, userId) {
+  const conv = await Conversation.findByPk(conversationId);
+  if (!conv) return { error: { status: 404, message: 'Conversation not found' } };
+
+  const store = await Store.findByPk(conv.storeId);
+  const isCustomer = conv.customerUserId === userId;
+  const isStoreOwner = store?.ownerUserId === userId;
+  if (!isCustomer && !isStoreOwner) {
+    return { error: { status: 403, message: 'Forbidden' } };
+  }
+  return { conv, store, isCustomer, isStoreOwner };
+}
 
 exports.openOrGet = async (req, res) => {
   const { storeId } = req.body || {};
   if (!storeId) return res.status(400).json({ ok: false, message: 'storeId requerido' });
 
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  const store = await Store.findByPk(storeId);
   if (!store) return res.status(404).json({ ok: false, message: 'Store not found' });
 
-  let conv = await prisma.conversation.findFirst({
+  let conv = await Conversation.findOne({
     where: { storeId, customerUserId: req.user.id, status: 'OPEN' }
   });
+  
   if (!conv) {
-    conv = await prisma.conversation.create({ data: { storeId, customerUserId: req.user.id, status: 'OPEN' } });
+    conv = await Conversation.create({ storeId, customerUserId: req.user.id, status: 'OPEN' });
   }
   res.status(201).json({ ok: true, data: conv });
 };
 
 exports.get = async (req, res) => {
-  const conv = await prisma.conversation.findUnique({ where: { id: req.params.id } });
-  if (!conv) return res.status(404).json({ ok: false, message: 'Conversation not found' });
-
-  const store = await prisma.store.findUnique({ where: { id: conv.storeId } });
-  const isCustomer = conv.customerUserId === req.user.id;
-  const isStoreOwner = store?.ownerUserId === req.user.id;
-  if (!isCustomer && !isStoreOwner) return res.status(403).json({ ok: false, message: 'Forbidden' });
+  const { conv, error } = await ensureAccess(req.params.id, req.user.id);
+  if (error) return res.status(error.status).json({ ok: false, message: error.message });
 
   res.json({ ok: true, data: conv });
 };
 
 exports.listMessages = async (req, res) => {
-  const conv = await prisma.conversation.findUnique({ where: { id: req.params.id } });
-  if (!conv) return res.status(404).json({ ok: false, message: 'Conversation not found' });
+  const { conv, error } = await ensureAccess(req.params.id, req.user.id);
+  if (error) return res.status(error.status).json({ ok: false, message: error.message });
 
-  const store = await prisma.store.findUnique({ where: { id: conv.storeId } });
-  const isCustomer = conv.customerUserId === req.user.id;
-  const isStoreOwner = store?.ownerUserId === req.user.id;
-  if (!isCustomer && !isStoreOwner) return res.status(403).json({ ok: false, message: 'Forbidden' });
-
-  const msgs = await prisma.message.findMany({ where: { conversationId: conv.id }, orderBy: { createdAt: 'asc' } });
+  const msgs = await Message.findAll({ 
+    where: { conversationId: conv.id }, 
+    order: [['createdAt', 'ASC']] 
+  });
   res.json({ ok: true, data: msgs });
 };
 
 exports.sendMessage = async (req, res) => {
-  const conv = await prisma.conversation.findUnique({ where: { id: req.params.id } });
-  if (!conv) return res.status(404).json({ ok: false, message: 'Conversation not found' });
+  const { conv, error, isCustomer } = await ensureAccess(req.params.id, req.user.id);
+  if (error) return res.status(error.status).json({ ok: false, message: error.message });
 
-  const store = await prisma.store.findUnique({ where: { id: conv.storeId } });
-  const isCustomer = conv.customerUserId === req.user.id;
-  const isStoreOwner = store?.ownerUserId === req.user.id;
-  if (!isCustomer && !isStoreOwner) return res.status(403).json({ ok: false, message: 'Forbidden' });
+  const body = req.body?.body || '';
+  if (!body.trim()) return res.status(400).json({ ok: false, message: 'body requerido' });
 
   const senderType = isCustomer ? 'USER' : 'STORE';
-  const msg = await prisma.message.create({
-    data: {
-      conversationId: conv.id,
-      senderType,
-      senderUserId: isCustomer ? req.user.id : null,
-      body: req.body?.body || ''
-    }
+  const msg = await Message.create({
+    conversationId: conv.id,
+    senderType,
+    senderUserId: isCustomer ? req.user.id : null,
+    body: body.trim(),
   });
   res.status(201).json({ ok: true, data: msg });
 };
 
 exports.markRead = async (req, res) => {
-  const conv = await prisma.conversation.findUnique({ where: { id: req.params.id } });
-  if (!conv) return res.status(404).json({ ok: false, message: 'Conversation not found' });
+  const { conv, error, isCustomer } = await ensureAccess(req.params.id, req.user.id);
+  if (error) return res.status(error.status).json({ ok: false, message: error.message });
 
-  const store = await prisma.store.findUnique({ where: { id: conv.storeId } });
-  const isCustomer = conv.customerUserId === req.user.id;
-  const isStoreOwner = store?.ownerUserId === req.user.id;
-  if (!isCustomer && !isStoreOwner) return res.status(403).json({ ok: false, message: 'Forbidden' });
-
-  await prisma.message.updateMany({
-    where: { conversationId: conv.id, readAt: null, senderType: isCustomer ? 'STORE' : 'USER' },
-    data: { readAt: new Date() }
-  });
+  await Message.update(
+    { readAt: new Date() },
+    {
+      where: {
+        conversationId: conv.id,
+        readAt: null,
+        senderType: isCustomer ? 'STORE' : 'USER',
+      },
+    }
+  );
   res.json({ ok: true });
 };

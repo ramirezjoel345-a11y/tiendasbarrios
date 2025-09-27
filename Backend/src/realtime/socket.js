@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const prisma = require('../config/prisma');
+const { Store, Conversation, Message, User } = require('../models');
 
 /**
  * Autentica el socket usando el token enviado en 'auth.token'
@@ -23,6 +23,19 @@ function verifySocketAuth(socket) {
   }
 }
 
+async function ensureConversation(storeId, userId) {
+  const store = await Store.findByPk(storeId);
+  if (!store || !store.isActive) throw new Error('Tienda no encontrada');
+
+  let conv = await Conversation.findOne({
+    where: { storeId, customerUserId: userId, status: 'OPEN' },
+  });
+  if (!conv) {
+    conv = await Conversation.create({ storeId, customerUserId: userId, status: 'OPEN' });
+  }
+  return { store, conv };
+}
+
 module.exports = function setupSocket(io) {
   io.use((socket, next) => {
     try {
@@ -35,20 +48,12 @@ module.exports = function setupSocket(io) {
   });
 
   io.on('connection', (socket) => {
-    // Un cliente conectado y autenticado
-    // Eventos:
-    // - join_shop: el cliente se une a la sala de una tienda
-    // - message:send: envía un mensaje a la tienda
-
     socket.on('join_shop', async ({ shopId }, cb) => {
       try {
         if (!shopId || typeof shopId !== 'string') throw new Error('shopId requerido');
-
-        const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { id: true, isActive: true } });
-        if (!shop || !shop.isActive) throw new Error('Tienda no encontrada');
-
-        socket.join(`shop:${shopId}`);
-        cb?.({ ok: true, message: `Unido a shop:${shopId}` });
+        const { store, conv } = await ensureConversation(shopId, socket.user.id);
+        socket.join(`shop:${store.id}`);
+        cb?.({ ok: true, conversationId: conv.id });
       } catch (err) {
         cb?.({ ok: false, error: err.message });
       }
@@ -59,29 +64,24 @@ module.exports = function setupSocket(io) {
         if (!shopId || typeof shopId !== 'string') throw new Error('shopId requerido');
         if (!content || typeof content !== 'string' || !content.trim()) throw new Error('content requerido');
 
-        // Verifica tienda existe
-        const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { id: true, isActive: true } });
-        if (!shop || !shop.isActive) throw new Error('Tienda no encontrada');
-
-        // Crea mensaje
-        const msg = await prisma.message.create({
-          data: {
-            shopId,
-            senderId: socket.user.id,
-            content: content.trim()
-          },
-          include: {
-            sender: { select: { id: true, name: true, photoUrl: true, role: true } }
-          }
+        const { store, conv } = await ensureConversation(shopId, socket.user.id);
+        const msg = await Message.create({
+          conversationId: conv.id,
+          senderType: 'USER',
+          senderUserId: socket.user.id,
+          body: content.trim(),
         });
 
-        // Emite a todos en la sala (incluido el emisor)
-        io.to(`shop:${shopId}`).emit('message:new', {
+        const sender = await User.findByPk(socket.user.id, {
+          attributes: ['id', 'name', 'role'], 
+        });
+
+        io.to(`shop:${store.id}`).emit('message:new', {
           id: msg.id,
-          shopId: msg.shopId,
-          content: msg.content,
+          conversationId: conv.id,
+          body: msg.body,
           createdAt: msg.createdAt,
-          sender: msg.sender
+          sender: sender ? sender.toJSON() : { id: socket.user.id },
         });
 
         cb?.({ ok: true });
