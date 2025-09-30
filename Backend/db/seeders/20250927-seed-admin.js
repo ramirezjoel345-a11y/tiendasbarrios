@@ -1,22 +1,22 @@
 'use strict';
 const { v4: uuid } = require('uuid');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 module.exports = {
-  async up (queryInterface) {
+  async up (qi) {
     const hash = await bcrypt.hash('123456', 10);
-    await queryInterface.bulkInsert('users', [{
+    await qi.bulkInsert('users', [{
       id: uuid(),
       name: 'Admin Demo',
       email: 'admin@demo.com',
-      password: hash,
-      role: 'admin',
+      passwordHash: hash,      // <- coincide con el modelo y el login
+      role: 'ADMIN',
       createdAt: new Date(),
       updatedAt: new Date(),
     }], {});
   },
 
-  async down (queryInterface) {
-    await queryInterface.bulkDelete('users', { email: 'admin@demo.com' }, {});
+  async down (qi) {
+    await qi.bulkDelete('users', { email: 'admin@demo.com' }, {});
   }
 };

@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mini Socket Test</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket = io('http://localhost:4000', {
+    transports: ['websocket'],
+    path: '/socket.io'
+  });
+
+  socket.on('connect', () => {
+    console.log('✅ conectado:', socket.id);
+    document.body.innerHTML += `<p>✅ conectado: ${socket.id}</p>`;
+  });
+
+  socket.on('connect_error', (err) => {
+    console.log('❌ connect_error:', err.message);
+    document.body.innerHTML += `<p>❌ connect_error: ${err.message}</p>`;
+  });
+
+  socket.on('disconnect', (r) => {
+    console.log('⚠️ disconnect:', r);
+    document.body.innerHTML += `<p>⚠️ disconnect: ${r}</p>`;
+  });
+</script>

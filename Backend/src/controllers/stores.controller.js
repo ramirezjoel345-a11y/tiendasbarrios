@@ -1,57 +1,34 @@
-// backend/src/controllers/stores.controller.js
-const { Op } = require('sequelize');
-const { Store } = require('../models');
-
-exports.create = async (req, res) => {
-  try {
-    const ownerUserId = req.user.id;
-    const { name, slug, description, photoUrl, coverUrl, phone, addressLine, lat, lng } = req.body;
-
-    const store = await Store.create({
-      name,
-      slug,
-      description,
-      photoUrl,
-      coverUrl,
-      phone,
-      addressLine,
-      lat,
-      lng,
-      ownerUserId
-    });
-
-    res.status(201).json({ ok: true, data: store });
-  } catch (e) {
-    console.error('stores.create', e);
-    res.status(500).json({ ok: false, message: 'Error creando tienda' });
-  }
-};
+const Store = require('../models/store.model');
 
 exports.list = async (req, res) => {
-  try {
-    const { q } = req.query;
-    const where = q
-      ? { name: { [Op.iLike]: `%${q}%` } }
-      : {};
-    
-    const data = await Store.findAll({
-      where,
-      order: [['createdAt', 'DESC']],
-    });
-    res.json({ ok: true, data });
-  } catch (e) {
-    console.error('stores.list', e);
-    res.status(500).json({ ok: false, message: 'Error listando tiendas' });
-  }
+  const rows = await Store.findAll({ order: [['id', 'ASC']] });
+  res.json(rows);
 };
 
-exports.getById = async (req, res) => {
-  try {
-    const data = await Store.findByPk(req.params.id);
-    if (!data) return res.status(404).json({ ok: false, message: 'Tienda no encontrada' });
-    res.json({ ok: true, data });
-  } catch (e) {
-    console.error('stores.getById', e);
-    res.status(500).json({ ok: false, message: 'Error obteniendo tienda' });
-  }
+exports.get = async (req, res) => {
+  const row = await Store.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Store not found' });
+  res.json(row);
+};
+
+exports.create = async (req, res) => {
+  const { name, description, phone, address, isActive } = req.body;
+  if (!name) return res.status(400).json({ message: 'name is required' });
+  const row = await Store.create({ name, description, phone, address, isActive });
+  res.status(201).json(row);
+};
+
+exports.update = async (req, res) => {
+  const row = await Store.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Store not found' });
+  const { name, description, phone, address, isActive } = req.body;
+  await row.update({ name, description, phone, address, isActive });
+  res.json(row);
+};
+
+exports.remove = async (req, res) => {
+  const row = await Store.findByPk(req.params.id);
+  if (!row) return res.status(404).json({ message: 'Store not found' });
+  await row.destroy();
+  res.status(204).end();
 };

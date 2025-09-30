@@ -1,29 +1,13 @@
+'use strict';
 const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+const config = require('../../sequelize-config')[process.env.NODE_ENV || 'development'];
 
-const modelDefiners = [
-  require('./User'),
-  require('./Store'),
-  require('./StorePaymentMethod'),
-  require('./StoreRating'),
-  require('./Conversation'),
-  require('./Message'),
-];
+const sequelize = new Sequelize(config.database, config.username, config.password, config);
 
-const models = modelDefiners.reduce((acc, defineModel) => {
-  const model = defineModel(sequelize, DataTypes);
-  acc[model.name] = model;
-  return acc;
-}, {});
+const db = {};
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
 
-Object.values(models).forEach((model) => {
-  if (typeof model.associate === 'function') {
-    model.associate(models);
-  }
-});
+db.User = require('./User')(sequelize, DataTypes);
 
-module.exports = {
-  sequelize,
-  Sequelize,
-  ...models,
-};
+module.exports = db;

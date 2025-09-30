@@ -1,84 +1,83 @@
-// backend/src/controllers/chats.controller.js
-const { Conversation, Store, Message } = require('../models');
+const { Conversation, Message } = require('../models');
 
-async function ensureAccess(conversationId, userId) {
-  const conv = await Conversation.findByPk(conversationId);
-  if (!conv) return { error: { status: 404, message: 'Conversation not found' } };
+exports.createConversationForStore = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    const customerUserId = req.user.id; // <- viene del middleware auth
 
-  const store = await Store.findByPk(conv.storeId);
-  const isCustomer = conv.customerUserId === userId;
-  const isStoreOwner = store?.ownerUserId === userId;
-  if (!isCustomer && !isStoreOwner) {
-    return { error: { status: 403, message: 'Forbidden' } };
+    let conv = await Conversation.findOne({ where: { storeId, customerUserId } });
+    if (!conv) {
+      conv = await Conversation.create({ storeId, customerUserId, status: 'OPEN' });
+    }
+
+    res.json({ ok: true, data: conv });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
-  return { conv, store, isCustomer, isStoreOwner };
-}
-
-exports.openOrGet = async (req, res) => {
-  const { storeId } = req.body || {};
-  if (!storeId) return res.status(400).json({ ok: false, message: 'storeId requerido' });
-
-  const store = await Store.findByPk(storeId);
-  if (!store) return res.status(404).json({ ok: false, message: 'Store not found' });
-
-  let conv = await Conversation.findOne({
-    where: { storeId, customerUserId: req.user.id, status: 'OPEN' }
-  });
-  
-  if (!conv) {
-    conv = await Conversation.create({ storeId, customerUserId: req.user.id, status: 'OPEN' });
-  }
-  res.status(201).json({ ok: true, data: conv });
 };
 
-exports.get = async (req, res) => {
-  const { conv, error } = await ensureAccess(req.params.id, req.user.id);
-  if (error) return res.status(error.status).json({ ok: false, message: error.message });
+exports.listConversationsByStore = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    const where = { storeId };
+    if (req.query.customerUserId) where.customerUserId = req.query.customerUserId;
 
-  res.json({ ok: true, data: conv });
+    const conversations = await Conversation.findAll({
+      where,
+      order: [['updatedAt', 'DESC']],
+    });
+
+    res.json({ ok: true, data: conversations });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 };
 
 exports.listMessages = async (req, res) => {
-  const { conv, error } = await ensureAccess(req.params.id, req.user.id);
-  if (error) return res.status(error.status).json({ ok: false, message: error.message });
+  try {
+    const { conversationId } = req.params;
+    const msgs = await Message.findAll({
+      where: { conversationId },
+      order: [['createdAt', 'ASC']],
+    });
 
-  const msgs = await Message.findAll({ 
-    where: { conversationId: conv.id }, 
-    order: [['createdAt', 'ASC']] 
-  });
-  res.json({ ok: true, data: msgs });
+    res.json({ ok: true, data: msgs });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 };
 
-exports.sendMessage = async (req, res) => {
-  const { conv, error, isCustomer } = await ensureAccess(req.params.id, req.user.id);
-  if (error) return res.status(error.status).json({ ok: false, message: error.message });
+exports.createMessage = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { senderType, text } = req.body;
 
-  const body = req.body?.body || '';
-  if (!body.trim()) return res.status(400).json({ ok: false, message: 'body requerido' });
+    if (!['USER', 'STORE'].includes(senderType)) {
+      return res.status(422).json({ ok: false, error: 'senderType debe ser "USER" o "STORE"' });
+    }
 
-  const senderType = isCustomer ? 'USER' : 'STORE';
-  const msg = await Message.create({
-    conversationId: conv.id,
-    senderType,
-    senderUserId: isCustomer ? req.user.id : null,
-    body: body.trim(),
-  });
-  res.status(201).json({ ok: true, data: msg });
+    const msg = await Message.create({
+      conversationId,
+      senderType,
+      body: text,
+      senderUserId: senderType === 'USER' ? req.user.id : null,
+    });
+
+    res.status(201).json({ ok: true, data: msg });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 };
 
 exports.markRead = async (req, res) => {
-  const { conv, error, isCustomer } = await ensureAccess(req.params.id, req.user.id);
-  if (error) return res.status(error.status).json({ ok: false, message: error.message });
-
-  await Message.update(
-    { readAt: new Date() },
-    {
-      where: {
-        conversationId: conv.id,
-        readAt: null,
-        senderType: isCustomer ? 'STORE' : 'USER',
-      },
-    }
-  );
-  res.json({ ok: true });
+  try {
+    const { id } = req.params;
+    const [updated] = await Message.update(
+      { readAt: new Date() },
+      { where: { id } }
+    );
+    res.json({ ok: true, updated: updated > 0 });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 };

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Chat realtime – TiendaBarrios (Tester)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --fg:#e8e8e8; --muted:#a0a0a0; --ok:#25d366; --card:#121212; }
+    html, body { margin:0; padding:0; background:#0a0a0a; color:#f2f2f2; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif; }
+    h1 { font-size:clamp(22px,2.6vw,32px); margin:18px 16px 12px; }
+    .wrap { padding:0 16px 24px; max-width:980px; margin:0 auto; }
+    .row { display:grid; gap:8px; margin:10px 0; }
+    .grid-2 { grid-template-columns:1fr 1fr; }
+    .grid-3 { grid-template-columns:1fr 1fr 1fr; }
+    .card { background:var(--card); border:1px solid #222; border-radius:12px; padding:12px; }
+    label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+    input, select, textarea { width:100%; background:#151515; color:#f2f2f2; border:1px solid #2a2a2a; border-radius:10px; padding:10px 12px; outline:none; }
+    button { background:#1f70ff; border:none; color:white; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; }
+    button.secondary { background:#2b2b2b; color:#ddd; }
+    button.ghost { background:transparent; border:1px solid #2b2b2b; color:#ddd; }
+    .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+    #log { background:#0d0d0d; color:#a6ffa6; font-family:ui-monospace,Menlo,Consolas,monospace; padding:12px; border-radius:12px; border:1px solid #222; min-height:120px; white-space:pre-wrap; }
+    .pill { display:inline-flex; align-items:center; gap:8px; background:#0f0f0f; border:1px solid #202020; padding:8px 10px; border-radius:999px; font-size:12px; color:#cfcfcf; }
+    .pill.ok { color:var(--ok); border-color:#1b3; }
+    .msgs { display:flex; flex-direction:column; gap:8px; max-height:360px; overflow:auto; }
+    .msg { padding:10px 12px; border-radius:12px; border:1px solid #222; background:#0f0f0f; }
+    .meta { font-size:12px; color:#bbb; margin-bottom:4px; }
+    .meta .tag { font-size:11px; padding:2px 6px; border-radius:6px; background:#1a1a1a; border:1px solid #2a2a2a; margin-left:6px; }
+    .b { font-weight:700; color:#fff; }
+  </style>
+</head>
+<body>
+  <h1>Chat realtime – TiendaBarrios (Tester)</h1>
+  <div class="wrap">
+    <div class="row grid-2">
+      <div class="card">
+        <label>Backend Base URL</label>
+        <input id="baseUrl" value="http://localhost:4000" />
+        <div style="margin-top:8px">
+          <span class="pill" id="socketStatus">⏳ socket: desconectado</span>
+        </div>
+      </div>
+      <div class="card">
+        <label>Token (Authorization: Bearer ...)</label>
+        <textarea id="token" placeholder="Pega aquí el token de /auth/login"></textarea>
+      </div>
+    </div>
+
+    <div class="row grid-3">
+      <div class="card">
+        <label>Conversation ID</label>
+        <input id="convId" placeholder="f7e0e6cc-...." />
+        <div class="btn-row" style="margin-top:8px">
+          <button id="joinBtn">Join</button>
+          <button class="secondary" id="leaveBtn">Leave</button>
+          <button class="ghost" id="loadHistoryBtn">Cargar historial</button>
+          <button class="ghost" id="clearLogBtn">Limpiar log</button>
+        </div>
+      </div>
+      <div class="card">
+        <label>Remitente (senderType)</label>
+        <select id="senderType">
+          <option value="USER">USER</option>
+          <option value="STORE">STORE</option>
+        </select>
+        <label style="margin-top:10px">Mensaje</label>
+        <input id="msgText" placeholder="Escribe tu mensaje..." />
+        <div class="btn-row" style="margin-top:8px">
+          <button id="sendBtn">Enviar mensaje</button>
+        </div>
+      </div>
+      <div class="card">
+        <label>Log</label>
+        <div id="log">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="meta">Historial (BD)</div>
+      <div id="history" class="msgs"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function logLine(m) {
+      const el = $('log');
+      el.textContent = (el.textContent === '—' ? '' : el.textContent + '\\n') + m;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    let socket = null;
+    let connectedBase = '';
+
+    function connectSocket() {
+      const baseUrl = $('baseUrl').value.trim().replace(/\/$/, '');
+      if (socket && connectedBase === baseUrl) return;
+      if (socket) socket.disconnect();
+
+      $('socketStatus').textContent = '⏳ socket: conectando...';
+      $('socketStatus').className = 'pill';
+
+      socket = io(baseUrl, { transports: ['websocket'], path: '/socket.io' });
+      connectedBase = baseUrl;
+
+      socket.on('connect', function() {
+        $('socketStatus').textContent = '✅ socket: ' + socket.id;
+        $('socketStatus').className = 'pill ok';
+        logLine('✅ conectado: ' + socket.id);
+      });
+
+      socket.on('connect_error', function(err) {
+        logLine('❌ connect_error: ' + err.message);
+      });
+
+      socket.on('disconnect', function(reason) {
+        $('socketStatus').textContent = '⚠️ socket: desconectado';
+        $('socketStatus').className = 'pill';
+        logLine('⚠️ disconnect: ' + reason);
+      });
+
+      socket.on('conversation:joined', function(p) { logLine('👂 joined ' + p.conversationId); });
+      socket.on('conversation:left',  function(p) { logLine('👋 left ' + p.conversationId); });
+      socket.on('message:new', function(m)   { logLine('💬 ' + JSON.stringify(m)); });
+      socket.on('message:read', function(p)  { logLine('👀 read ' + JSON.stringify(p)); });
+      socket.on('typing', function(p)        { logLine('⌨️ typing ' + JSON.stringify(p)); });
+    }
+
+    function authHeaders() {
+      const t = $('token').value.trim();
+      return t ? { 'Authorization': 'Bearer ' + t } : {};
+    }
+
+    async function sendMessage() {
+      try {
+        connectSocket();
+        const baseUrl = $('baseUrl').value.trim().replace(/\/$/, '');
+        const convId  = $('convId').value.trim();
+        const text    = $('msgText').value.trim();
+        const type    = $('senderType').value;
+
+        if (!convId) { alert('Falta conversationId'); return; }
+        if (!text)   { alert('Escribe un mensaje'); return; }
+
+        const res = await fetch(baseUrl + '/api/v1/chat/conversations/' + convId + '/messages', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+          body: JSON.stringify({ senderType: type, text: text })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        logLine('➡️ enviado (REST): ' + JSON.stringify(data.data));
+        $('msgText').value = '';
+      } catch (e) {
+        logLine('❌ error send: ' + e.message);
+        alert('Error al enviar: ' + e.message);
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        connectSocket();
+        const baseUrl = $('baseUrl').value.trim().replace(/\/$/, '');
+        const convId  = $('convId').value.trim();
+        if (!convId) { alert('Falta conversationId'); return; }
+
+        const res = await fetch(baseUrl + '/api/v1/chat/conversations/' + convId + '/messages', {
+          headers: authHeaders()
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || res.statusText);
+
+        const list = json.data || [];
+        const box = $('history');
+        box.innerHTML = '';
+        if (!list.length) {
+          box.innerHTML = '<div class="msg"><div class="meta">No hay mensajes</div></div>';
+          return;
+        }
+        for (var i = 0; i < list.length; i++) {
+          var m = list[i];
+          var el = document.createElement('div');
+          el.className = 'msg';
+          el.innerHTML =
+            '<div class="meta"><span class="b">' + m.senderType + '</span>' +
+            '<span class="tag">' + new Date(m.createdAt).toLocaleString() + '</span></div>' +
+            '<div>' + (String(m.body || '').replace(/</g,'&lt;')) + '</div>';
+          box.appendChild(el);
+        }
+      } catch (e) {
+        logLine('❌ error history: ' + e.message);
+        alert('Error al cargar historial: ' + e.message);
+      }
+    }
+
+    // typing (opcional)
+    let typingTimer = null;
+    $('msgText').addEventListener('input', () => {
+      const convId = $('convId').value.trim();
+      if (!convId || !socket || !socket.connected) return;
+      socket.emit('typing:start', { conversationId: convId, senderType: $('senderType').value });
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        socket.emit('typing:stop', { conversationId: convId, senderType: $('senderType').value });
+      }, 1200);
+    });
+
+    $('sendBtn').onclick = sendMessage;
+    $('loadHistoryBtn').onclick = loadHistory;
+    $('clearLogBtn').onclick = function(){ $('log').textContent = '—'; };
+
+    $('joinBtn').onclick = function() {
+      connectSocket();
+      var convId = $('convId').value.trim();
+      if (!convId) { alert('Falta conversationId'); return; }
+      socket.emit('conversation:join', convId);
+    };
+    $('leaveBtn').onclick = function() {
+      connectSocket();
+      var convId = $('convId').value.trim();
+      if (!convId) { alert('Falta conversationId'); return; }
+      socket.emit('conversation:leave', convId);
+    };
+
+    connectSocket();
+  </script>
+</body>
+</html>

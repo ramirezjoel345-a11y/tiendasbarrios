@@ -1,32 +1,17 @@
 require('dotenv').config();
 
+const base = {
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  database: process.env.DB_NAME || 'tiendabarrios',
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT || 5432),
+  dialect: 'postgres',
+  logging: false
+};
+
 module.exports = {
-  development: {
-    username: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'tiendabarrio',
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-    dialect: 'postgres',
-    logging: false,
-  },
-  test: {
-    username: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: `${process.env.DB_NAME || 'tiendabarrio'}_test`,
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-    dialect: 'postgres',
-    logging: false,
-  },
-  production: {
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-    dialect: 'postgres',
-    logging: false,
-    dialectOptions: {},
-  },
+  development: base,
+  test: base,
+  production: base
 };

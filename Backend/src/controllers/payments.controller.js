@@ -1,48 +1,56 @@
-// backend/src/controllers/payments.controller.js
-const { StorePaymentMethod, Store } = require('../models');
+const { Store, StorePaymentMethod } = require('../models');
 
-exports.listByStore = async (req, res) => {
-  const data = await StorePaymentMethod.findAll({ where: { storeId: req.params.storeId } });
-  res.json({ ok: true, data });
-};
-
-exports.addForStore = async (req, res) => {
+exports.upsertForStore = async (req, res) => {
   try {
-    const store = await Store.findByPk(req.params.storeId);
-    if (!store) return res.status(404).json({ ok: false, message: 'Store not found' });
-    if (store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
+    const { storeId } = req.params;
+    const { methods } = req.body;
 
-    const created = await StorePaymentMethod.create({
-      storeId: store.id,
-      type: req.body.type,
-      isEnabled: !!req.body.isEnabled,
-      details: req.body.details || {}
+    if (!storeId) {
+      return res.status(422).json({ ok: false, error: 'storeId requerido en la URL' });
+    }
+    if (!Array.isArray(methods)) {
+      return res.status(422).json({ ok: false, error: 'methods debe ser un array' });
+    }
+
+    const exists = await Store.findByPk(storeId);
+    if (!exists) return res.status(404).json({ ok: false, error: 'Store not found' });
+
+    const rows = methods.map((m, idx) => {
+      if (!m || !m.method) {
+        throw new Error(`methods[${idx}].method es requerido`);
+      }
+      return {
+        storeId,
+        type: String(m.method).toUpperCase(),   // 👈 columna real = type
+        enabled: typeof m.enabled === 'boolean' ? m.enabled : true,
+        details: m.details ?? {}
+      };
     });
-    res.status(201).json({ ok: true, data: created });
-  } catch (e) {
-    console.error('payments.addForStore', e);
-    res.status(500).json({ ok: false, message: 'Error creando método de pago' });
+
+    // Reemplazar todos
+    await StorePaymentMethod.destroy({ where: { storeId } });
+    const created = await StorePaymentMethod.bulkCreate(rows, { returning: true });
+
+    return res.json({ ok: true, data: created });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
   }
 };
 
-exports.update = async (req, res) => {
-  const pm = await StorePaymentMethod.findByPk(req.params.id, { 
-    include: { model: Store, as: 'store' } 
-  });
-  if (!pm) return res.status(404).json({ ok: false, message: 'Payment not found' });
-  if (pm.store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
+exports.listForStore = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    if (!storeId) {
+      return res.status(422).json({ ok: false, error: 'storeId requerido en la URL' });
+    }
 
-  await pm.update(req.body);
-  res.json({ ok: true, data: pm });
-};
+    const data = await StorePaymentMethod.findAll({
+      where: { storeId },
+      order: [['createdAt', 'ASC']]
+    });
 
-exports.remove = async (req, res) => {
-  const pm = await StorePaymentMethod.findByPk(req.params.id, { 
-    include: { model: Store, as: 'store' } 
-  });
-  if (!pm) return res.status(404).json({ ok: false, message: 'Payment not found' });
-  if (pm.store.ownerUserId !== req.user.id) return res.status(403).json({ ok: false, message: 'Forbidden' });
-
-  await pm.destroy();
-  res.status(204).send();
+    return res.json({ ok: true, data });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 };

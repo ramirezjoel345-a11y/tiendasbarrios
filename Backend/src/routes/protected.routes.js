@@ -1,17 +1,15 @@
 // src/routes/protected.routes.js
-'use strict';
-
 const express = require('express');
-const { authGuard } = require('../middlewares/auth');
 const router = express.Router();
+const requireAuth = require('../middlewares/requireAuth');
+const requireRole = require('../middlewares/requireRole');
 
-router.get('/ping', authGuard, (req, res) => {
-  res.status(200).json({
-    ok: true,
-    message: 'pong (protegido)',
-    user: { id: req.user.sub, email: req.user.email, role: req.user.role },
-    timestamp: new Date().toISOString(),
-  });
+router.get('/ping', requireAuth, (_req, res) => {
+  res.json({ message: 'pong protegido' });
+});
+
+router.get('/admin-only', requireAuth, requireRole('admin'), (_req, res) => {
+  res.json({ message: 'solo admin accedió' });
 });
 
 module.exports = router;

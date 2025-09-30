@@ -1,11 +1,14 @@
+// backend/src/routes/payments.routes.js
 const { Router } = require('express');
 const router = Router();
+
 const ctrl = require('../controllers/payments.controller');
 const auth = require('../middlewares/auth');
 
-router.get('/store/:storeId', ctrl.listByStore);
-router.post('/store/:storeId', auth, ctrl.addForStore);
-router.put('/:id', auth, ctrl.update);
-router.delete('/:id', auth, ctrl.remove);
+// Actualizar/crear todos los métodos de pago de una tienda
+router.put('/stores/:storeId/payments', auth, ctrl.upsertForStore);
+
+// Listar métodos de pago de una tienda
+router.get('/stores/:storeId/payments', ctrl.listForStore);
 
 module.exports = router;
