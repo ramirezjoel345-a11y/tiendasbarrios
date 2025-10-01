@@ -1,29 +1,25 @@
-// backend/src/models/Store.js
+// src/models/store.js
+'use strict';
+
 module.exports = (sequelize, DataTypes) => {
   const Store = sequelize.define('Store', {
-    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-    ownerUserId: { type: DataTypes.UUID, allowNull: false },
-    name: { type: DataTypes.STRING(120), allowNull: false },
-    slug: { type: DataTypes.STRING(140), allowNull: false, unique: true },
-    description: { type: DataTypes.TEXT, allowNull: true },
-    photoUrl: { type: DataTypes.TEXT, allowNull: true },
-    coverUrl: { type: DataTypes.TEXT, allowNull: true },
-    phone: { type: DataTypes.STRING(30), allowNull: true },
-    addressLine: { type: DataTypes.STRING(180), allowNull: true },
-    lat: { type: DataTypes.DECIMAL(10,7), allowNull: true },
-    lng: { type: DataTypes.DECIMAL(10,7), allowNull: true },
-    isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+    id:               { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    name:             { type: DataTypes.STRING(120), allowNull: false },
+    description:      { type: DataTypes.TEXT },
+    avatar_url:       { type: DataTypes.TEXT },
+
+    // NUEVOS CAMPOS DE PERFIL
+    welcome_message:  { type: DataTypes.TEXT },
+    cover_url:        { type: DataTypes.TEXT },
+    address:          { type: DataTypes.TEXT },
+    lat:              { type: DataTypes.DECIMAL(9, 6) },
+    lng:              { type: DataTypes.DECIMAL(9, 6) },
+    open_time:        { type: DataTypes.TIME },
+    close_time:       { type: DataTypes.TIME },
   }, {
     tableName: 'stores',
-    indexes: [{ unique: true, fields: ['slug'] }],
+    underscored: true,
   });
-
-  Store.associate = (models) => {
-    Store.hasMany(models.StorePaymentMethod, { foreignKey: 'storeId', as: 'paymentMethods' });
-    Store.hasMany(models.StoreRating, { foreignKey: 'storeId', as: 'ratings' });
-    Store.hasMany(models.Conversation, { foreignKey: 'storeId', as: 'conversations' });
-    Store.belongsTo(models.User, { foreignKey: 'ownerUserId', as: 'owner' });
-  };
 
   return Store;
 };

@@ -1,9 +1,12 @@
-const { Router } = require('express');
-const stores = require('./stores.routes');
+// src/routes/index.js
+const express = require('express');
+const router = express.Router();
 
-const api = Router();
+// ping de verificación
+router.get('/health', (_req, res) => res.json({ ok: true }));
 
-api.get('/health', (_req, res) => res.json({ ok: true }));
-api.use('/stores', stores);
+router.use('/auth', require('./auth.routes'));
+router.use('/protected', require('./protected.routes'));
+router.use('/stores', require('./stores.routes'));
 
-module.exports = api;
+module.exports = router;

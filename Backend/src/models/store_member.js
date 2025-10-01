@@ -1,15 +1,15 @@
 'use strict';
 
 module.exports = (sequelize, DataTypes) => {
-  const Message = sequelize.define('Message', {
+  const StoreMember = sequelize.define('StoreMember', {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     store_id: { type: DataTypes.UUID, allowNull: false },
     user_id: { type: DataTypes.UUID, allowNull: false },
-    content: { type: DataTypes.TEXT, allowNull: false },
+    role: { type: DataTypes.ENUM('OWNER', 'MEMBER'), allowNull: false, defaultValue: 'MEMBER' },
   }, {
-    tableName: 'messages',
+    tableName: 'store_members',
     underscored: true,
   });
 
-  return Message;
+  return StoreMember;
 };
